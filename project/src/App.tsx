@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
   Search, User, Heart, ShoppingBag, Home, LayoutGrid,
   X, Plus, Minus, ChevronRight, ChevronLeft, ArrowRight,
@@ -10,7 +9,32 @@ import { PRODUCTS, CATEGORIES } from './data';
 import type { Product, CartItem } from './data';
 import { ProductCard } from './components/ProductCard';
 import { CategoriesPage } from './pages/CategoriesPage';
-import { ProductDetailPage } from './pages/ProductDetailPage';
+
+// ─── Simple pathname-based router ─────────────────────────────────────────────
+
+type Page = 'home' | 'categories';
+
+function usePage(): [Page, (p: Page) => void] {
+  const getPage = (): Page =>
+    window.location.pathname === '/categories' ? 'categories' : 'home';
+
+  const [page, setPageState] = useState<Page>(getPage);
+
+  useEffect(() => {
+    const handler = () => setPageState(getPage());
+    window.addEventListener('popstate', handler);
+    return () => window.removeEventListener('popstate', handler);
+  }, []);
+
+  const navigate = (target: Page) => {
+    const path = target === 'categories' ? '/categories' : '/';
+    window.history.pushState(null, '', path);
+    setPageState(target);
+    window.scrollTo(0, 0);
+  };
+
+  return [page, navigate];
+}
 
 // ─── Logo Component ───────────────────────────────────────────────────────────
 
@@ -807,8 +831,7 @@ function MobileBottomNav({ activeTab, onTabChange, cartCount, onCartOpen }: Mobi
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const [page, navigate] = usePage();
 
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [favorites, setFavorites] = useState<Set<number>>(new Set());
@@ -816,23 +839,20 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [flashMap, setFlashMap] = useState<Record<number, boolean>>({});
 
-  // 判断当前路由，决定底部导航高亮与是否显示返回箭头
-  const isCategories = location.pathname === '/categories';
-  const isProductDetail = location.pathname.startsWith('/product/');
-  const activeTab = isCategories ? 'categories' : 'home';
+  // activeTab follows page; 'bag' and 'profile' are overlays on top of home
+  const activeTab = page === 'categories' ? 'categories' : 'home';
 
   const cartCount = cartItems.reduce((s, i) => s + i.quantity, 0);
 
-  // 加入购物车：已存在则数量+1，否则新增一条
-  function handleAddToCart(product: Product, quantity = 1) {
+  function handleAddToCart(product: Product) {
     setCartItems((prev) => {
       const existing = prev.find((i) => i.product.id === product.id);
       if (existing) {
         return prev.map((i) =>
-          i.product.id === product.id ? { ...i, quantity: i.quantity + quantity } : i
+          i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i
         );
       }
-      return [...prev, { product, quantity }];
+      return [...prev, { product, quantity: 1 }];
     });
     setFlashMap((m) => ({ ...m, [product.id]: true }));
     setTimeout(() => setFlashMap((m) => ({ ...m, [product.id]: false })), 800);
@@ -857,9 +877,9 @@ export default function App() {
 
   function handleTabChange(tab: string) {
     if (tab === 'categories') {
-      navigate('/categories');
+      navigate('categories');
     } else if (tab === 'home') {
-      navigate('/');
+      navigate('home');
     } else if (tab === 'bag') {
       setCartOpen(true);
     }
@@ -872,9 +892,6 @@ export default function App() {
     flashMap,
   };
 
-  // 详情页与分类页均显示返回箭头
-  const showBack = isCategories || isProductDetail;
-
   return (
     <div className="min-h-screen bg-white font-sans">
       <Navbar
@@ -883,60 +900,39 @@ export default function App() {
         onCartOpen={() => setCartOpen(true)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onBack={showBack ? () => navigate(-1) : undefined}
+        onBack={page === 'categories' ? () => navigate('home') : undefined}
       />
 
-      <Routes>
-        <Route
-          path="/categories"
-          element={<CategoriesPage {...sharedCartFavProps} />}
-        />
-        <Route
-          path="/product/:id"
-          element={
-            <ProductDetailPage
-              favorites={favorites}
-              onToggleFav={handleToggleFav}
-              onAddToCart={handleAddToCart}
-              onBuyNow={(product, quantity) => {
-                handleAddToCart(product, quantity);
-                setCartOpen(true);
-              }}
-            />
-          }
-        />
-        <Route
-          path="/"
-          element={
-            <main>
-              {!searchQuery && (
-                <>
-                  <HeroBanner />
-                  <PromoStrip />
-                  <CategoryQuickLinks onNavigateAll={() => navigate('/categories')} />
-                </>
-              )}
+      {page === 'categories' ? (
+        <CategoriesPage {...sharedCartFavProps} />
+      ) : (
+        <main>
+          {!searchQuery && (
+            <>
+              <HeroBanner />
+              <PromoStrip />
+              <CategoryQuickLinks onNavigateAll={() => navigate('categories')} />
+            </>
+          )}
 
-              <ProductGrid
-                favorites={favorites}
-                onToggleFav={handleToggleFav}
-                onAddToCart={handleAddToCart}
-                flashMap={flashMap}
-                searchQuery={searchQuery}
-              />
+          <ProductGrid
+            favorites={favorites}
+            onToggleFav={handleToggleFav}
+            onAddToCart={handleAddToCart}
+            flashMap={flashMap}
+            searchQuery={searchQuery}
+          />
 
-              {!searchQuery && (
-                <>
-                  <InspirationSection />
-                  <MemberBanner />
-                </>
-              )}
+          {!searchQuery && (
+            <>
+              <InspirationSection />
+              <MemberBanner />
+            </>
+          )}
 
-              <Footer />
-            </main>
-          }
-        />
-      </Routes>
+          <Footer />
+        </main>
+      )}
 
       <CartDrawer
         open={cartOpen}
