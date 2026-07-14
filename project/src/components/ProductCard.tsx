@@ -1,4 +1,5 @@
 import { Heart, Plus, Check, Star } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import type { Product } from '../data';
 
 export interface ProductCardProps {
@@ -10,12 +11,16 @@ export interface ProductCardProps {
 }
 
 export function ProductCard({ product, isFavorite, onToggleFav, onAddToCart, addedFlash }: ProductCardProps) {
+  const navigate = useNavigate();
   const discount = product.originalPrice
     ? Math.round((1 - product.price / product.originalPrice) * 100)
     : null;
 
   return (
-    <div className="group bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 flex flex-col">
+    <div
+      onClick={() => navigate(`/product/${product.id}`)}
+      className="group bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 flex flex-col cursor-pointer"
+    >
       <div className="relative overflow-hidden bg-gray-50 aspect-square">
         <img
           src={product.image}
@@ -77,7 +82,7 @@ export function ProductCard({ product, isFavorite, onToggleFav, onAddToCart, add
             )}
           </div>
           <button
-            onClick={onAddToCart}
+            onClick={(e) => { e.stopPropagation(); onAddToCart(); }}
             className={`w-9 h-9 rounded-full flex items-center justify-center shadow-md transition-all duration-200 active:scale-90 ${
               addedFlash
                 ? 'bg-emerald-500 scale-90'
